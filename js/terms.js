@@ -238,7 +238,7 @@ window.TERMS = [
  d:'Tudo nítido do primeiro plano ao fundo. Abertura pequena (f/11–f/16) e lente aberta.',
  u:'Várias camadas de ação ao mesmo tempo, estilo Cidadão Kane.',
  p:'Deep focus, f/16, foreground grass and distant mountains equally sharp'},
-{c:'lente',g:'foco',en:'Bokeh',pt:'Bokeh',tk:'creamy bokeh',x:{shot:'mcu',light:'blue',lens:{f:85,N:1.2}},
+{c:'lente',g:'foco',en:'Bokeh',pt:'Bokeh',tk:'creamy bokeh',x:{shot:'cu',light:'blue',lens:{f:85,N:1.2}},
  d:'A qualidade do desfoque, principalmente das luzes pontuais, que viram discos.',
  u:'Atmosfera noturna, romance, festa.',
  p:'Creamy bokeh from string lights behind the explorer at dusk'},
@@ -300,7 +300,7 @@ window.TERMS = [
  d:'Contraste dramático entre luz e sombra, herdado da pintura barroca (Caravaggio, Rembrandt).',
  u:'Drama clássico, mistério, solenidade.',
  p:'Chiaroscuro lighting, half of the face in deep shadow, painterly contrast'},
-{c:'luz',en:'Silhouette',pt:'Silhueta',tk:'backlit silhouette',x:{shot:'fs',light:'silhouette'},
+{c:'luz',en:'Silhouette',pt:'Silhueta',tk:'backlit silhouette',x:{shot:'fs',angle:'low',light:'silhouette'},
  d:'Fonte forte atrás do personagem: ele vira uma forma escura contra o fundo claro.',
  u:'Mistério, iconografia, foco na pose e na forma.',
  p:'Backlit silhouette of the explorer against a blazing sunset'},
@@ -461,6 +461,10 @@ window.TERMS = [
  p:'Appealing character design, big expressive eyes, clear readable silhouette'},
 
 // ───────────── ESTILOS ─────────────
+{c:'estilo',en:'Voxel art',pt:'Arte em voxels',tk:'voxel art style, blocky 3D world',x:{shot:'ws',angle:'high',move:'orbit',style:'voxel'},
+ d:'Mundo e personagens construídos com cubos (voxels), como pixels em 3D, com texturas em pixel art.',
+ u:'Jogos de blocos, dioramas, nostalgia. Descreva como "voxel" ou "blocky": nomes de jogos podem ser bloqueados ou puxar personagens de terceiros.',
+ p:'Voxel art style, blocky 3D world, a small explorer in a red scarf on a grassy hill, soft shadows, ambient occlusion'},
 {c:'estilo',en:'Hand-drawn 2D animation',pt:'Animação 2D tradicional',tk:'hand-drawn 2D animation',x:{shot:'fs',style:'hand'},
  d:'Desenhado à mão quadro a quadro, com linhas que "fervem" levemente (line boil).',
  u:'Calor artesanal, clássicos da Disney e animação autoral.',

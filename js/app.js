@@ -52,6 +52,10 @@ function wireMonitor(fig, v) {
   $$('.mon-ctrl button', fig).forEach(b => b.addEventListener('click', () => {
     const a = b.dataset.act;
     if (a === 'pause') { const p = v.toggle(); b.setAttribute('aria-pressed', p); b.textContent = p ? 'Continuar' : 'Pausar'; $('.dom-stage', fig).classList.toggle('paused', p); }
+    else if (a === 'fs') {
+      const on = document.fullscreenElement === fig;
+      try { const pr = on ? document.exitFullscreen() : fig.requestFullscreen(); if (pr && pr.catch) pr.catch(() => toast('Tela cheia indisponível aqui')); } catch (err) { toast('Tela cheia indisponível aqui'); }
+    }
     else { v.guides[a] = !v.guides[a]; b.setAttribute('aria-pressed', v.guides[a]); v.draw(); }
   }));
 }
@@ -77,6 +81,84 @@ function play(vk, x) {
     stage.hidden = true; v.cv.hidden = false; fig.classList.remove('is-dom'); v.resize(); v.set(x);
   }
 }
+
+// ─── Filmes por categoria e camadas da tela
+const FILMS = window.FILMS || {};
+function buildFilm(cat) {
+  const F = FILMS[cat]; if (!F) return null;
+  const shots = F.shots.map(([id, capTxt, x, dur]) => {
+    const term = byId(id); if (!term) return null;
+    const base = term.x || {}, ov = x || {}, keep2d = base.p2d && !Object.keys(ov).length;
+    const spec = Object.assign({}, base.p2d && !keep2d ? {} : base, ov);
+    return { term, cap: capTxt, spec, dur: dur || 4.2, tr: F.tr || 'cut' };
+  }).filter(Boolean);
+  if (!shots.length) return null;
+  shots[shots.length - 1].tr = 'fade';
+  return { cat, title: F.title, shots, total: shots.reduce((a, b) => a + b.dur, 0) };
+}
+const filmStart = (F, i) => F.shots.slice(0, i).reduce((a, b) => a + b.dur, 0);
+let mode = store.get('mode', 'term');
+const LAYER_DEF = { ficha: 1, plano: 1, angulo: 1, camera: 1, lente: 1, luz: 1, atmos: 1, estilo: 0, cor: 0, anim: 1, tempo: 0, comp: 0, trans: 1, term: 1, caption: 1, timeline: 1, guides: 0 };
+const layers = Object.assign({}, LAYER_DEF, store.get('layers', {}));
+const FXDEF = { dof: true, atmos: true, post: true, shadows: true };
+const fxFlags = Object.assign({}, FXDEF, store.get('fx', {}));
+const CHIPS = {
+  chipsFicha: [['ficha', 'Mostrar ficha'], ['plano', 'Plano'], ['angulo', 'Ângulo'], ['camera', 'Câmera'], ['lente', 'Lente'], ['luz', 'Luz'], ['atmos', 'Atmosfera'], ['estilo', 'Estilo'], ['cor', 'Cor'], ['anim', 'Animação'], ['tempo', 'Tempo'], ['comp', 'Composição'], ['trans', 'Transição']],
+  chipsFilm: [['term', 'Termo do plano'], ['caption', 'Legenda'], ['timeline', 'Linha do tempo'], ['guides', 'Guias (terços)']],
+  chipsFx: [['dof', 'Profundidade de campo'], ['atmos', 'Névoa e partículas'], ['post', 'Cor e pós'], ['shadows', 'Sombras']]
+};
+function renderChips() {
+  for (const [id, list] of Object.entries(CHIPS)) {
+    const fx = id === 'chipsFx', src = fx ? fxFlags : layers;
+    $('#' + id).innerHTML = list.map(([k, label]) => `<button type="button" class="tog" data-k="${k}" data-fx="${fx ? 1 : 0}" aria-pressed="${!!src[k]}">${label}</button>`).join('');
+  }
+  $('#chipsFicha').classList.toggle('off', !layers.ficha);
+}
+function applyFx() { const W3 = window.World3D; if (W3 && W3.flags) Object.assign(W3.flags, fxFlags); }
+window.addEventListener('world3d-ready', () => { applyFx(); Object.values(V).forEach(v => v.draw()); });
+$('#layersPanel').addEventListener('click', e => {
+  const b = e.target.closest('.tog'); if (!b) return;
+  const k = b.dataset.k, fx = b.dataset.fx === '1', src = fx ? fxFlags : layers;
+  src[k] = !src[k]; store.set(fx ? 'fx' : 'layers', src); renderChips(); applyFx();
+  Object.values(V).forEach(v => { if (!v.running || v.paused) v.draw(); });
+});
+V.v1.layers = layers; V.v2.layers = layers;
+function renderStrip(F) {
+  const ol = $('#filmStrip');
+  if (!F) { ol.hidden = true; ol.innerHTML = ''; return; }
+  ol.hidden = false;
+  ol.innerHTML = F.shots.map((sh, i) => `<li style="flex-grow:${sh.dur.toFixed(2)}"><button type="button" data-shot="${i}" title="${esc(sh.term.en)} · ${esc(sh.cap)}"><span class="sn">${String(i + 1).padStart(2, '0')}</span><span class="st">${esc(sh.term.en)}</span></button></li>`).join('');
+}
+function markStrip(i) { $$('#filmStrip button').forEach(b => b.setAttribute('aria-current', +b.dataset.shot === i)); }
+$('#filmStrip').addEventListener('click', e => {
+  const b = e.target.closest('button[data-shot]'); const F = V.v1.spec && V.v1.spec.film; if (!b || !F) return;
+  V.v1.seek(filmStart(F, +b.dataset.shot) + .01);
+});
+V.v1.onShot = (i, sh) => { markStrip(i); if (curTerm !== sh.term) select(sh.term, { fromFilm: true, noHash: true }); };
+function setMode(m) {
+  mode = m; store.set('mode', m);
+  $$('.mode-bar [data-mode]').forEach(b => b.setAttribute('aria-checked', b.dataset.mode === m));
+  if (curTerm) select(curTerm, { noHash: true });
+}
+$$('.mode-bar [data-mode]').forEach(b => b.addEventListener('click', () => { if (!b.disabled) setMode(b.dataset.mode); }));
+function showOnMonitor(t, opts) {
+  const hasFilm = !!FILMS[t.c], filmBtn = $('.mode-bar [data-mode="film"]');
+  filmBtn.disabled = !hasFilm;
+  $('#modeNote').textContent = !hasFilm ? 'Esta categoria mostra demos em código ao vivo; os filmes cobrem as categorias de linguagem de vídeo.'
+    : mode === 'film' ? 'Filme da categoria: cada plano demonstra um termo. Clique num plano ou num termo da lista para pular até ele.'
+    : 'Cada termo em loop. No modo filme, os termos da categoria viram uma sequência de planos com ficha técnica.';
+  V.v1.lessonCat = t.c;
+  if (mode === 'film' && hasFilm) {
+    let F = V.v1.spec && V.v1.spec.film;
+    if (!F || F.cat !== t.c) { F = buildFilm(t.c); play('v1', { film: F }); renderStrip(F); }
+    if (!(opts && opts.fromFilm)) { const idx = F.shots.findIndex(s => s.term === t); if (idx >= 0) V.v1.seek(filmStart(F, idx) + .01); }
+    return;
+  }
+  renderStrip(null);
+  if (opts && opts.fromFilm) return;
+  play('v1', t.x);
+}
+renderChips();
 
 // ─── Abas
 const TABS = { explorar: 'v1', montar: 'v2', treinar: 'v3' };
@@ -144,7 +226,7 @@ function select(t, opts) {
     ${t.x.dom && DEMOS[t.x.dom] ? `<div class="code-box"><div class="cb-head"><h3>Código desta demo</h3><button class="link-btn" type="button" data-do="code">Copiar código</button></div><pre id="exCode">${esc(demoCode(DEMOS[t.x.dom]))}</pre></div>` : ''}
     ${t.v ? `<p class="vs"><b>Não confunda</b>${esc(t.v)}</p>` : ''}
     <div class="d-actions"><div class="d-nav"><button class="btn ghost" type="button" data-do="prev" ${pos === 0 ? 'disabled' : ''}>← Anterior</button><button class="btn ghost" type="button" data-do="next" ${pos === list.length - 1 ? 'disabled' : ''}>Próximo →</button></div><span class="kbd">↑ ↓ na lista navega</span></div>`;
-  play('v1', t.x);
+  showOnMonitor(t, opts);
   markSeen(t);
   if (!opts || !opts.noHash) { try { history.replaceState(null, '', '#' + t.id); } catch (e) { /* sandbox */ } }
 }
@@ -279,9 +361,11 @@ const quiz = {
 $('#qOpts').addEventListener('click', e => { const b = e.target.closest('.q-opt'); if (b && !b.disabled) quiz.answer(b.dataset.id); });
 
 // ─── Início
+$$('.mode-bar [data-mode]').forEach(b => b.setAttribute('aria-checked', b.dataset.mode === mode));
 updateProgress(); renderCats(); renderList(); builder.init(); quiz.init();
 const fromHash = location.hash ? byId(location.hash.slice(1)) : null;
 select(fromHash || TERMS.find(t => t.c === curCat) || TERMS[0], { noHash: !fromHash });
+window.__lexico = { V, buildFilm, filmStart, setMode };   // depuração no console
 const startTab = store.get('tab', 'explorar');
 showTab(TABS[startTab] ? startTab : 'explorar');
 const cur = $('#termList [aria-current="true"]'); if (cur) cur.scrollIntoView({ block: 'nearest' });

@@ -907,8 +907,45 @@ const P2D = {
 };
 function draw2D(cv, key, t) { const c = cv.getContext('2d'), W = cv.width, H = cv.height; paper2d(c, W, H); (P2D[key] || P2D.squash)(c, W, H, t); }
 
+// ─── Render: motor 3D (world3d.js) quando disponível; o 2.5D acima é o fallback sem WebGL2
+const W3T0 = performance.now();
+function renderAny(cv, S, t) {
+  const W3 = window.World3D;
+  if (W3 && W3.ready) { try { return W3.render(S, t, cv); } catch (e) { console.error(e); W3.ready = false; W3.failed = true; } }
+  if ((W3 && W3.failed) || performance.now() - W3T0 > 9000) return renderScene(cv, S, t);
+  const c = cv.getContext('2d'), W = cv.width, H = cv.height;
+  c.setTransform(1, 0, 0, 1, 0, 0); c.filter = 'none'; c.globalAlpha = 1; c.fillStyle = '#0B0E13'; c.fillRect(0, 0, W, H);
+  c.fillStyle = '#9FB0C4'; c.font = `600 ${Math.max(11, Math.round(15 * W / 960))}px "IBM Plex Mono", monospace`; c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.fillText('carregando cena 3D…', W / 2, H / 2);
+  return { label: '', info: null, mb: 0, L: {} };
+}
+function renderShot(cv, S, t) {   // qualquer spec (cena, papel 2D ou transição) num canvas
+  if (S.p2d) { draw2D(cv, S.p2d, t - 3); return { label: '', info: null, mb: 0, L: {} }; }
+  if (S.trans) return { label: renderTrans(cv, S, t), info: null, mb: 0, L: {} };
+  return renderAny(cv, S, t);
+}
+
 // ─── Transições: renderiza A e B e compõe
 const bufA = document.createElement('canvas'), bufB = document.createElement('canvas');
+// k: 0 = só A, 1 = só B
+function composite(c, kind, A, B, k, W, H) {
+  c.setTransform(1, 0, 0, 1, 0, 0); c.filter = 'none'; c.globalAlpha = 1; c.globalCompositeOperation = 'source-over';
+  if (kind === 'dissolve' || kind === 'morph') {
+    if (kind === 'morph') { const m = Math.sin(k * Math.PI); c.filter = `blur(${m * 8 * W / 960}px)`; c.save(); c.translate(W / 2, H / 2); c.scale(1 + m * .08, 1 - m * .04); c.translate(-W / 2, -H / 2); c.drawImage(A, 0, 0, W, H); c.globalAlpha = k; c.drawImage(B, 0, 0, W, H); c.restore(); c.filter = 'none'; c.globalAlpha = 1; }
+    else { c.drawImage(A, 0, 0, W, H); c.globalAlpha = k; c.drawImage(B, 0, 0, W, H); c.globalAlpha = 1; }
+  } else if (kind === 'fade') {
+    c.drawImage(k < .5 ? A : B, 0, 0, W, H); c.fillStyle = `rgba(0,0,0,${1 - Math.abs(k - .5) * 2})`; c.fillRect(0, 0, W, H);
+  } else if (kind === 'wipe') {
+    c.drawImage(A, 0, 0, W, H); c.save(); c.beginPath(); c.rect(0, 0, W * k, H); c.clip(); c.drawImage(B, 0, 0, W, H); c.restore();
+    if (k > 0 && k < 1) { c.fillStyle = '#fff'; c.fillRect(W * k - 2, 0, 4, H); }
+  } else if (kind === 'iris') {
+    const img = k < .5 ? A : B, rad = Math.abs(k - .5) * 2 * Math.hypot(W, H) * .55;
+    c.fillStyle = '#000'; c.fillRect(0, 0, W, H); c.save(); c.beginPath(); c.arc(W * .5, H * .45, rad, 0, TAU); c.clip(); c.drawImage(img, 0, 0, W, H); c.restore();
+  } else if (kind === 'whip') {
+    const off = k * W; c.filter = (k > .02 && k < .98) ? `blur(${18 * W / 960}px)` : 'none';
+    c.drawImage(A, -off, 0, W, H); c.drawImage(B, W - off, 0, W, H); c.filter = 'none';
+  } else c.drawImage(k > .5 ? B : A, 0, 0, W, H);
+}
 const TRANS_A = { shot: 'ms', light: 'day' }, TRANS_B = { shot: 'ws', light: 'golden' };
 function renderTrans(cv, S, t) {
   const W = cv.width, H = cv.height, c = cv.getContext('2d');
@@ -919,47 +956,37 @@ function renderTrans(cv, S, t) {
   c.setTransform(1, 0, 0, 1, 0, 0); c.filter = 'none'; c.globalAlpha = 1; c.globalCompositeOperation = 'source-over';
   if (kind === 'long') {
     const k = fract(t / 12);
-    renderScene(cv, { shot: 'ms', light: 'golden', rigFn: r => { const e = ease(pp(k)); r.d *= lerp(9, .45, e); r.el += lerp(35, 0, e); r.az += lerp(-50, 25, e); r.mb = 0; } }, t);
+    renderAny(cv, { shot: 'ms', light: 'golden', rigFn: r => { const e = ease(pp(k)); r.d *= lerp(9, .45, e); r.el += lerp(35, 0, e); r.az += lerp(-50, 25, e); r.mb = 0; } }, t);
     return 'SEM CORTES';
   }
   if (kind === 'montage') {
     const shots = [{ shot: 'cu', light: 'golden' }, { shot: 'xws', light: 'golden' }, { shot: 'ins', light: 'day' }, { shot: 'fs', angle: 'low', light: 'golden' }, { shot: 'fs', angle: 'overhead' }, { shot: 'ms', light: 'blue' }, { shot: 'ws', move: 'pan', light: 'day' }];
-    const i = Math.floor(t / .55) % shots.length; renderScene(cv, shots[i], t); return 'PLANO ' + (i + 1) + '/' + shots.length;
+    const i = Math.floor(t / .55) % shots.length; renderAny(cv, shots[i], t); return 'PLANO ' + (i + 1) + '/' + shots.length;
   }
   if (kind === 'jump') {
-    const seg = Math.floor(t / .7); renderScene(cv, { shot: 'fs', light: 'day', jumpX: (hash(seg) - .5) * 1.6 }, seg * .7 + 3); return 'CORTE ' + (seg % 9 + 1);
+    const seg = Math.floor(t / .7); renderAny(cv, { shot: 'fs', light: 'day', jumpX: (hash(seg) - .5) * 1.6 }, seg * .7 + 3); return 'CORTE ' + (seg % 9 + 1);
   }
   let A = TRANS_A, B = TRANS_B;
   if (kind === 'match') { A = { shot: 'ws', light: 'golden', rigFn: r => { r.yawOff = -38; r.pitchOff = 6; } }; B = { shot: 'ws', light: 'night', rigFn: r => { r.yawOff = 25; r.pitchOff = 28; } }; }
   if (kind === 'smash') { A = { shot: 'cu', light: 'neon', move: 'handheld', fx: ['ca'], rigFn: r => { r.shake = 4; } }; B = { shot: 'ws', light: 'night' }; }
-  renderScene(bufA, A, t); renderScene(bufB, B, t);
+  renderAny(bufA, A, t); renderAny(bufB, B, t);
   const instant = kind === 'cut' || kind === 'match' || kind === 'smash';
   const k = instant ? (p(.001, .001) > .5 ? 1 : 0) : kind === 'whip' ? p(.12, .12) : kind === 'iris' || kind === 'fade' ? p(.3, .3) : p(.22, .22);
-  if (kind === 'dissolve' || kind === 'morph') {
-    if (kind === 'morph') { const m = Math.sin(k * Math.PI); c.filter = `blur(${m * 8 * W / 960}px)`; c.save(); c.translate(W / 2, H / 2); c.scale(1 + m * .08, 1 - m * .04); c.translate(-W / 2, -H / 2); c.drawImage(bufA, 0, 0); c.globalAlpha = k; c.drawImage(bufB, 0, 0); c.restore(); c.filter = 'none'; c.globalAlpha = 1; }
-    else { c.drawImage(bufA, 0, 0); c.globalAlpha = k; c.drawImage(bufB, 0, 0); c.globalAlpha = 1; }
-  } else if (kind === 'fade') {
-    c.drawImage(k < .5 ? bufA : bufB, 0, 0); c.fillStyle = `rgba(0,0,0,${1 - Math.abs(k - .5) * 2})`; c.fillRect(0, 0, W, H);
-  } else if (kind === 'wipe') {
-    c.drawImage(bufA, 0, 0); c.save(); c.beginPath(); c.rect(0, 0, W * k, H); c.clip(); c.drawImage(bufB, 0, 0); c.restore();
-    if (k > 0 && k < 1) { c.fillStyle = '#fff'; c.fillRect(W * k - 2, 0, 4, H); }
-  } else if (kind === 'iris') {
-    const img = k < .5 ? bufA : bufB, rad = Math.abs(k - .5) * 2 * Math.hypot(W, H) * .55, sp = [W * .5, H * .45];
-    c.fillStyle = '#000'; c.fillRect(0, 0, W, H); c.save(); c.beginPath(); c.arc(sp[0], sp[1], rad, 0, TAU); c.clip(); c.drawImage(img, 0, 0); c.restore();
-  } else if (kind === 'whip') {
-    const off = k * W; c.filter = (k > .02 && k < .98) ? `blur(${18 * W / 960}px)` : 'none';
-    c.drawImage(bufA, -off, 0); c.drawImage(bufB, W - off, 0); c.filter = 'none';
-  } else { c.drawImage(k > .5 ? bufB : bufA, 0, 0); }
+  composite(c, instant ? 'cut' : kind, bufA, bufB, k, W, H);
   lab = (k > .5 ? 'PLANO B' : 'PLANO A');
   if (kind === 'smash') lab = k > .5 ? 'SILÊNCIO' : 'CAOS';
   return lab;
 }
 
-// ─── Classe pública: um canvas, um loop
+// ─── Classe pública: um canvas, um loop. Modos: spec única (termo) ou filme (sequência de planos)
+const TR_DUR = { dissolve: .9, morph: .9, fade: 1.1, wipe: .7, iris: 1.1, whip: .45 };
+const fA = document.createElement('canvas'), fB = document.createElement('canvas');
+function rrect(c, x, y, w, h, r) { c.beginPath(); if (c.roundRect) c.roundRect(x, y, w, h, r); else c.rect(x, y, w, h); }
 class Viewer {
   constructor(canvas, hud) {
     this.cv = canvas; this.hud = hud || {}; this.spec = null; this.time = 0; this.last = 0; this.running = false; this.paused = false;
     this.guides = { thirds: false, safe: false }; this.buf = document.createElement('canvas'); this.trail = false;
+    this.layers = null; this.lessonCat = null; this.shotIdx = -1; this.onShot = null;
     this.reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
     this._loop = this._loop.bind(this);
     new ResizeObserver(() => this.resize()).observe(canvas); this.resize();
@@ -969,7 +996,8 @@ class Viewer {
     const dpr = Math.min(2, window.devicePixelRatio || 1), w = Math.round(clamp(r.width * dpr * (this.q || 1), 320, 960)), h = Math.round(w * 9 / 16);
     if (w !== this.cv.width) { this.cv.width = w; this.cv.height = h; this.buf.width = w; this.buf.height = h; this.trail = false; if (this.paused || !this.running) this.draw(); }
   }
-  set(spec) { this.spec = spec; this.time = 0; this.trail = false; this.draw(); }
+  set(spec) { this.spec = spec; this.time = 0; this.trail = false; this.shotIdx = -1; this.draw(); }
+  seek(time) { this.time = Math.max(0, time); this.trail = false; this.draw(); }
   start() { if (this.running) return; this.running = true; this.last = performance.now(); requestAnimationFrame(this._loop); }
   stop() { this.running = false; }
   toggle() { this.paused = !this.paused; return this.paused; }
@@ -984,29 +1012,99 @@ class Viewer {
   }
   draw() {
     const S = this.spec; if (!S || !this.cv.width) return;
-    const c = this.cv.getContext('2d'), W = this.cv.width, H = this.cv.height, t = this.time + 3;
+    const c = this.cv.getContext('2d'), W = this.cv.width, H = this.cv.height;
     QUIET = !!this.quiet;
-    let lab = '', info = null, badge = '';
-    try {
-      if (S.p2d) { draw2D(this.cv, S.p2d, this.time); }
-      else if (S.trans) { lab = renderTrans(this.cv, S, t); }
-      else {
-        const r = renderScene(this.buf, S, t); lab = r.label || r.L.label || ''; info = r.info;
-        const tm = TM[S.time || 'normal']; badge = tm.badge ? tm.badge(t) : '';
-        c.setTransform(1, 0, 0, 1, 0, 0); c.filter = 'none'; c.globalCompositeOperation = 'source-over';
-        const mb = r.mb || 0;
-        c.globalAlpha = (this.trail && mb) ? 1 - mb : 1; c.drawImage(this.buf, 0, 0); c.globalAlpha = 1; this.trail = true;
-        if (S.time === 'freeze') { const k = t % 5; if (k > 2 && k < 2.12) { c.fillStyle = `rgba(255,255,255,${1 - (k - 2) / .12})`; c.fillRect(0, 0, W, H); } }
-      }
-    } catch (e) { console.error(e); }
-    this.overlay(c, W, H, S, lab, badge);
-    if (this.hud.update) this.hud.update({ t: this.time, info, spec: S });
+    let o = { lab: '', info: null, badge: '' };
+    try { o = S.film ? this.drawFilm(c, W, H, S.film) : this.drawSpec(c, W, H, S, this.time + 3); } catch (e) { console.error(e); }
+    const spec = o.shot ? o.shot.spec : S;
+    this.overlay(c, W, H, spec, o.lab, o.badge);
+    if (this.layers && window.describeShot && !spec.p2d) this.drawFicha(c, W, H, spec, o.info, S.film ? S.film.cat : this.lessonCat, o.shot);
+    if (S.film) this.drawFilmOverlay(c, W, H, S.film, o);
+    if (this.hud.update) this.hud.update({ t: this.time, info: o.info, spec });
+  }
+  drawSpec(c, W, H, S, t) {
+    if (S.p2d) { draw2D(this.cv, S.p2d, t - 3); return { lab: '', info: null, badge: '' }; }
+    if (S.trans) return { lab: renderTrans(this.cv, S, t), info: null, badge: '' };
+    const r = renderAny(this.buf, S, t), tm = TM[S.time || 'normal'] || TM.normal;
+    c.setTransform(1, 0, 0, 1, 0, 0); c.filter = 'none'; c.globalCompositeOperation = 'source-over';
+    const mb = r.mb || 0;
+    c.globalAlpha = (this.trail && mb) ? 1 - mb : 1; c.drawImage(this.buf, 0, 0, W, H); c.globalAlpha = 1; this.trail = true;
+    if (S.time === 'freeze') { const k = t % 5; if (k > 2 && k < 2.12) { c.fillStyle = `rgba(255,255,255,${1 - (k - 2) / .12})`; c.fillRect(0, 0, W, H); } }
+    return { lab: r.label || (r.L && r.L.label) || '', info: r.info, badge: tm.badge ? tm.badge(t) : '' };
+  }
+  shotAt(F, time) {
+    const n = F.shots.length, ft = ((time % F.total) + F.total) % F.total;
+    let i = 0, acc = 0; while (i < n - 1 && ft >= acc + F.shots[i].dur) { acc += F.shots[i].dur; i++; }
+    return { i, acc, ft, lt: ft - acc };
+  }
+  drawFilm(c, W, H, F) {
+    const { i, ft, lt } = this.shotAt(F, this.time), sh = F.shots[i], nx = F.shots[(i + 1) % F.shots.length], trD = TR_DUR[sh.tr] || 0;
+    if (i !== this.shotIdx) { this.shotIdx = i; this.trail = false; if (this.onShot) this.onShot(i, sh); }
+    if (trD && lt > sh.dur - trD) {
+      for (const b of [fA, fB]) if (b.width !== W || b.height !== H) { b.width = W; b.height = H; }
+      const k = clamp((lt - (sh.dur - trD)) / trD, 0, 1), ra = renderShot(fA, sh.spec, lt + 3);
+      renderShot(fB, nx.spec, lt - (sh.dur - trD) + 3);
+      composite(c, sh.tr, fA, fB, k, W, H); this.trail = false;
+      return { lab: '', info: ra.info, badge: '', shot: sh, i, ft, lt };
+    }
+    return Object.assign(this.drawSpec(c, W, H, sh.spec, lt + 3), { shot: sh, i, ft, lt });
+  }
+  drawFicha(c, W, H, spec, info, cat, shot) {
+    const L = this.layers; if (!L.ficha) return;
+    const rows = window.describeShot(spec, info, { cat, next: shot ? shot.tr || 'cut' : null }).filter(r => L[r.k] || r.lesson);
+    if (!rows.length) return;
+    const ks = Math.max(W / 960, .62), pad = 9 * ks, lh = 18 * ks, fl = Math.round(9.5 * ks), fv = Math.round(12 * ks);
+    c.save(); c.setTransform(1, 0, 0, 1, 0, 0);
+    c.font = `600 ${fl}px "IBM Plex Mono", monospace`; const lw = Math.max(...rows.map(r => c.measureText(r.label.toUpperCase()).width)) + 10 * ks;
+    c.font = `500 ${fv}px "Atkinson Hyperlegible", system-ui, sans-serif`;
+    const maxV = W * .38, vw = Math.min(maxV, Math.max(...rows.map(r => c.measureText(r.value).width)));
+    const w = lw + vw + pad * 2, h = rows.length * lh + pad * 1.4, x = W - w - 12 * ks, y = 12 * ks;
+    c.fillStyle = 'rgba(8,10,14,.68)'; rrect(c, x, y, w, h, 6 * ks); c.fill();
+    c.textBaseline = 'middle';
+    rows.forEach((r, k) => {
+      const yy = y + pad * .7 + lh * (k + .5);
+      if (r.lesson) { c.fillStyle = 'rgba(255,116,104,.16)'; c.fillRect(x + 3 * ks, yy - lh / 2 + 1, w - 6 * ks, lh - 2); }
+      c.font = `600 ${fl}px "IBM Plex Mono", monospace`; c.fillStyle = r.lesson ? '#FF8A7E' : '#8FA3BA'; c.textAlign = 'left'; c.fillText(r.label.toUpperCase(), x + pad, yy);
+      c.font = `${r.lesson ? 700 : 500} ${fv}px "Atkinson Hyperlegible", system-ui, sans-serif`; c.fillStyle = '#F2F5F8';
+      let v = r.value; while (c.measureText(v).width > vw && v.length > 4) v = v.slice(0, -2) + '…';
+      c.fillText(v, x + pad + lw, yy);
+    });
+    c.restore();
+  }
+  drawFilmOverlay(c, W, H, F, o) {
+    const L = this.layers || {}, ks = Math.max(W / 960, .62), sh = o.shot; if (!sh) return;
+    c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.textBaseline = 'middle';
+    if (L.term) {
+      const x = 14 * ks, y = 52 * ks, t1 = `${String(o.i + 1).padStart(2, '0')}/${String(F.shots.length).padStart(2, '0')} · ${F.title.toUpperCase()}`, t2 = sh.term ? sh.term.en : '', t3 = sh.term ? sh.term.pt : '';
+      c.font = `600 ${Math.round(10 * ks)}px "IBM Plex Mono", monospace`; const w1 = c.measureText(t1).width;
+      c.font = `800 ${Math.round(26 * ks)}px "Big Shoulders Display", "Arial Narrow", sans-serif`; const w2 = c.measureText(t2.toUpperCase()).width;
+      const w = Math.max(w1, w2) + 20 * ks; c.fillStyle = 'rgba(8,10,14,.68)'; rrect(c, x, y, w, 64 * ks, 6 * ks); c.fill();
+      c.fillStyle = '#FF8A7E'; c.font = `600 ${Math.round(10 * ks)}px "IBM Plex Mono", monospace`; c.textAlign = 'left'; c.fillText(t1, x + 10 * ks, y + 13 * ks);
+      c.fillStyle = '#FFFFFF'; c.font = `800 ${Math.round(26 * ks)}px "Big Shoulders Display", "Arial Narrow", sans-serif`; c.fillText(t2.toUpperCase(), x + 10 * ks, y + 34 * ks);
+      c.fillStyle = '#B9C6D6'; c.font = `500 ${Math.round(11.5 * ks)}px "Atkinson Hyperlegible", system-ui, sans-serif`; c.fillText(t3, x + 10 * ks, y + 53 * ks);
+    }
+    if (L.caption && sh.cap) {
+      c.font = `600 ${Math.round(17 * ks)}px "Atkinson Hyperlegible", system-ui, sans-serif`; c.textAlign = 'center';
+      const tw = c.measureText(sh.cap).width, y = H - (L.timeline ? 34 : 24) * ks;
+      c.fillStyle = 'rgba(8,10,14,.72)'; rrect(c, W / 2 - tw / 2 - 12 * ks, y - 15 * ks, tw + 24 * ks, 30 * ks, 5 * ks); c.fill();
+      c.fillStyle = '#FFFFFF'; c.fillText(sh.cap, W / 2, y + 1);
+    }
+    if (L.timeline) {
+      const y = H - 7 * ks, gap = 2 * ks; let x = 0;
+      F.shots.forEach((s, k) => {
+        const w = s.dur / F.total * W;
+        c.fillStyle = k === o.i ? 'rgba(255,255,255,.35)' : 'rgba(255,255,255,.18)'; c.fillRect(x + gap / 2, y, w - gap, 4 * ks);
+        if (k === o.i) { c.fillStyle = '#FF5A4D'; c.fillRect(x + gap / 2, y, (w - gap) * clamp(o.lt / s.dur, 0, 1), 4 * ks); }
+        x += w;
+      });
+    }
+    c.restore();
   }
   overlay(c, W, H, S, lab, badge) {
     c.setTransform(1, 0, 0, 1, 0, 0); c.filter = 'none'; c.globalAlpha = 1; c.globalCompositeOperation = 'source-over';
-    const comp = S.comp || {}, k = W / 960;
+    const comp = S.comp || {}, k = W / 960, film = this.spec && this.spec.film;
     if (comp.aspect === '9:16') { const w = H * 9 / 16; c.fillStyle = 'rgba(8,10,14,.82)'; c.fillRect(0, 0, (W - w) / 2, H); c.fillRect((W + w) / 2, 0, (W - w) / 2, H); c.strokeStyle = 'rgba(255,255,255,.6)'; c.lineWidth = 1; c.strokeRect((W - w) / 2, 0, w, H); }
-    if (this.guides.thirds || comp.thirds) {
+    if (this.guides.thirds || comp.thirds || (this.layers && this.layers.guides)) {
       c.strokeStyle = comp.thirds ? 'rgba(255,90,80,.85)' : 'rgba(255,255,255,.55)'; c.lineWidth = 1.2 * k; c.beginPath();
       for (const f of [1 / 3, 2 / 3]) { c.moveTo(W * f, 0); c.lineTo(W * f, H); c.moveTo(0, H * f); c.lineTo(W, H * f); } c.stroke();
     }
@@ -1019,10 +1117,11 @@ class Viewer {
     const txt = this.quiet ? '' : [lab, badge].filter(Boolean).join('  ·  ');
     if (txt) {
       c.font = `600 ${Math.round(14 * k)}px "IBM Plex Mono", monospace`; c.textAlign = 'right'; c.textBaseline = 'middle';
-      const tw = c.measureText(txt).width; c.fillStyle = 'rgba(10,14,20,.72)'; c.fillRect(W - tw - 34 * k, H - 40 * k, tw + 22 * k, 26 * k); c.fillStyle = '#fff'; c.fillText(txt, W - 23 * k, H - 27 * k);
+      const yb = H - (film ? 64 : 40) * k;
+      const tw = c.measureText(txt).width; c.fillStyle = 'rgba(10,14,20,.72)'; c.fillRect(W - tw - 34 * k, yb, tw + 22 * k, 26 * k); c.fillStyle = '#fff'; c.fillText(txt, W - 23 * k, yb + 13 * k);
     }
   }
 }
 
-window.Anim = { Viewer, SH, MV, TM };
+window.Anim = { Viewer, SH, MV, TM, TR_DUR };
 })();

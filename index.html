@@ -16,7 +16,7 @@
   <div class="brand">
     <p class="slate"><span>X-SHEET</span><span id="countTerms">termos</span><span>12 categorias</span></p>
     <h1>Léxico do Animador</h1>
-    <p class="lede">A linguagem técnica de câmera, animação e motion design, demonstrada em movimento: para escrever prompts de vídeo com precisão e pedir ao Claude animações em código.</p>
+    <p class="lede">A linguagem técnica de câmera, animação e motion design, demonstrada num mundo 3D em voxels: para escrever prompts de vídeo com precisão e pedir ao Claude animações em código.</p>
   </div>
   <nav class="tabs" role="tablist" aria-label="Seções">
     <button role="tab" id="tab-explorar" aria-controls="explorar" aria-selected="true">Explorar</button>
@@ -43,6 +43,13 @@
       <ol id="termList" class="term-list"></ol>
     </aside>
     <div class="stage-col">
+      <div class="mode-bar">
+        <div class="seg" role="radiogroup" aria-label="O que o monitor mostra">
+          <button type="button" role="radio" aria-checked="true" data-mode="term">Termo</button>
+          <button type="button" role="radio" aria-checked="false" data-mode="film">Filme da categoria</button>
+        </div>
+        <p class="mode-note" id="modeNote">Cada termo em loop. No modo filme, os termos da categoria viram uma sequência de planos com ficha técnica.</p>
+      </div>
       <figure class="monitor" id="mon1">
         <canvas id="cv1" aria-label="Demonstração animada do termo selecionado" role="img"></canvas>
         <div class="dom-stage" hidden></div>
@@ -51,8 +58,18 @@
           <button class="chip-btn" data-act="pause" aria-pressed="false">Pausar</button>
           <button class="chip-btn" data-act="thirds" aria-pressed="false">Terços</button>
           <button class="chip-btn" data-act="safe" aria-pressed="false">Área segura</button>
+          <button class="chip-btn" data-act="fs" aria-pressed="false">Tela cheia</button>
         </div>
       </figure>
+      <ol class="film-strip" id="filmStrip" hidden aria-label="Planos do filme"></ol>
+      <details class="layers sheet" id="layersPanel" open>
+        <summary>Camadas e efeitos <span class="kbd">ligue e desligue o que aparece na tela</span></summary>
+        <div class="layer-groups">
+          <div class="lg"><h3>Ficha técnica</h3><div class="chips" id="chipsFicha"></div></div>
+          <div class="lg"><h3>Filme</h3><div class="chips" id="chipsFilm"></div></div>
+          <div class="lg"><h3>Efeitos da cena 3D</h3><div class="chips" id="chipsFx"></div></div>
+        </div>
+      </details>
       <article class="detail sheet" id="detail" aria-live="polite"></article>
     </div>
   </div>
@@ -133,12 +150,14 @@
   </div>
 </section>
 </main>
-<footer class="foot"><p>Demonstrações desenhadas em tempo real: cada plano usa uma câmera virtual com distância focal em mm e abertura f/N reais. Os prompts saem em inglês, idioma em que a maioria dos modelos de vídeo foi treinada. Nas categorias marcadas com “código”, cada demo é HTML, CSS e JavaScript reais, e o código exibido é exatamente o que roda.</p></footer>
+<footer class="foot"><p>Cenas renderizadas em tempo real com WebGL (Three.js): cada plano usa uma câmera virtual com distância focal em mm e abertura f/N reais, e o desfoque segue a óptica. Personagens e mundo são originais, em estilo voxel. Os prompts saem em inglês, idioma em que a maioria dos modelos de vídeo foi treinada. Nas categorias marcadas com “código”, cada demo é HTML, CSS e JavaScript reais, e o código exibido é exatamente o que roda.</p></footer>
 <div class="toast" id="toast" role="status" hidden></div>
 <!-- APP:END -->
 <script src="js/terms.js"></script>
 <script src="js/motion.js"></script>
+<script src="js/films.js"></script>
 <script src="js/engine.js"></script>
 <script src="js/app.js"></script>
+<script type="module" src="js/world3d.js"></script>
 </body>
 </html>
