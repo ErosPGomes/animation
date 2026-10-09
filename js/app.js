@@ -6,7 +6,8 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;'
 const slug = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 const cap = s => s ? s[0].toUpperCase() + s.slice(1) : s;
 const CATS = window.CATS, TERMS = window.TERMS;
-TERMS.forEach((t, i) => { t.i = i; t.id = slug(t.en); t.num = String(i + 1).padStart(3, '0'); t.tk = t.tk || t.en.toLowerCase(); t.bk = t.g || t.c; });
+const usedIds = new Set();
+TERMS.forEach((t, i) => { t.i = i; t.id = slug(t.en); if (usedIds.has(t.id)) t.id += '-' + t.c; usedIds.add(t.id); t.num = String(i + 1).padStart(3, '0'); t.tk = t.tk || t.en.toLowerCase(); t.bk = t.g || t.c; });
 const catOf = id => CATS.find(c => c.id === id);
 const byId = id => TERMS.find(t => t.id === id);
 
@@ -50,11 +51,32 @@ V.v3.quiet = true;
 function wireMonitor(fig, v) {
   $$('.mon-ctrl button', fig).forEach(b => b.addEventListener('click', () => {
     const a = b.dataset.act;
-    if (a === 'pause') { const p = v.toggle(); b.setAttribute('aria-pressed', p); b.textContent = p ? 'Continuar' : 'Pausar'; }
+    if (a === 'pause') { const p = v.toggle(); b.setAttribute('aria-pressed', p); b.textContent = p ? 'Continuar' : 'Pausar'; $('.dom-stage', fig).classList.toggle('paused', p); }
     else { v.guides[a] = !v.guides[a]; b.setAttribute('aria-pressed', v.guides[a]); v.draw(); }
   }));
 }
 wireMonitor($('#mon1'), V.v1); wireMonitor($('#mon2'), V.v2);
+
+// ─── Demos em código (HTML/CSS/JS reais) montadas no palco do monitor
+const DEMOS = (window.MOTION && window.MOTION.DEMOS) || {};
+{ const st = document.createElement('style'); st.id = 'demo-css'; st.textContent = Object.values(DEMOS).map(d => d.css || '').join('\n'); document.head.appendChild(st); }
+const FIG = { v1: 'mon1', v2: 'mon2', v3: 'mon3' }, cleanup = {};
+const demoCode = d => d.code || [d.css, d.js && d.js.toString()].filter(Boolean).join('\n\n');
+function play(vk, x) {
+  const fig = document.getElementById(FIG[vk]), stage = $('.dom-stage', fig), v = V[vk];
+  if (cleanup[vk]) { try { cleanup[vk](); } catch (e) { /* demo já removida */ } cleanup[vk] = null; }
+  stage.innerHTML = '';
+  if (x && x.dom && DEMOS[x.dom]) {
+    const d = DEMOS[x.dom];
+    v.cv.hidden = true; stage.hidden = false; v.set(null); fig.classList.add('is-dom');
+    stage.innerHTML = `<div class="demo demo-${x.dom}">${d.html}</div>`;
+    if (d.js) cleanup[vk] = d.js(stage.firstElementChild) || null;
+    const lens = $('[data-lens]', fig); if (lens) lens.textContent = 'HTML · CSS · JS';
+    const tc = $('[data-tc]', fig); if (tc) tc.textContent = 'AO VIVO';
+  } else {
+    stage.hidden = true; v.cv.hidden = false; fig.classList.remove('is-dom'); v.resize(); v.set(x);
+  }
+}
 
 // ─── Abas
 const TABS = { explorar: 'v1', montar: 'v2', treinar: 'v3' };
@@ -70,7 +92,7 @@ $$('.tabs [role=tab]').forEach(b => b.addEventListener('click', () => showTab(b.
 // ─── Explorar
 let curCat = store.get('cat', 'plano'), curTerm = null, query = '';
 function renderCats() {
-  $('#cats').innerHTML = CATS.map(c => `<button class="cat" role="tab" data-cat="${c.id}" aria-selected="${c.id === curCat && !query}"><b>${esc(c.pt)}</b><small>${esc(c.en)} · ${TERMS.filter(t => t.c === c.id).length}</small></button>`).join('');
+  $('#cats').innerHTML = CATS.map(c => `<button class="cat${c.code ? ' code' : ''}" role="tab" data-cat="${c.id}" aria-selected="${c.id === curCat && !query}"><b>${esc(c.pt)}</b><small>${esc(c.en)} · ${TERMS.filter(t => t.c === c.id).length}</small></button>`).join('');
 }
 $('#cats').addEventListener('click', e => {
   const b = e.target.closest('.cat'); if (!b) return;
@@ -117,11 +139,12 @@ function select(t, opts) {
     <div class="d-head"><span class="cat-tag">${esc(cat.pt)} · ${esc(cat.en)}</span><span>Nº ${t.num} · ${pos + 1}/${list.length} na categoria</span></div>
     <div class="d-title"><h2>${esc(t.en)}</h2><p>${esc(t.pt)}</p></div>
     <div class="d-grid"><div class="d-cell"><h3>O que é</h3><p>${esc(t.d)}</p></div><div class="d-cell"><h3>Efeito · quando usar</h3><p>${esc(t.u)}</p></div></div>
-    <div class="prompt-box"><h3>Como escrever no prompt</h3><code id="exPrompt">${highlightPrompt(t.p, t)}</code>
-      <div class="pb-row"><button class="btn ghost" type="button" data-do="copy">Copiar exemplo</button><button class="btn" type="button" data-do="use">Usar no montador</button></div></div>
+    <div class="prompt-box"><h3>${cat.code ? 'Peça ao Claude' : 'Como escrever no prompt'}</h3><code id="exPrompt">${highlightPrompt(t.p, t)}</code>
+      <div class="pb-row"><button class="btn ghost" type="button" data-do="copy">Copiar exemplo</button>${cat.code ? '' : '<button class="btn" type="button" data-do="use">Usar no montador</button>'}</div></div>
+    ${t.x.dom && DEMOS[t.x.dom] ? `<div class="code-box"><div class="cb-head"><h3>Código desta demo</h3><button class="link-btn" type="button" data-do="code">Copiar código</button></div><pre id="exCode">${esc(demoCode(DEMOS[t.x.dom]))}</pre></div>` : ''}
     ${t.v ? `<p class="vs"><b>Não confunda</b>${esc(t.v)}</p>` : ''}
     <div class="d-actions"><div class="d-nav"><button class="btn ghost" type="button" data-do="prev" ${pos === 0 ? 'disabled' : ''}>← Anterior</button><button class="btn ghost" type="button" data-do="next" ${pos === list.length - 1 ? 'disabled' : ''}>Próximo →</button></div><span class="kbd">↑ ↓ na lista navega</span></div>`;
-  V.v1.set(t.x);
+  play('v1', t.x);
   markSeen(t);
   if (!opts || !opts.noHash) { try { history.replaceState(null, '', '#' + t.id); } catch (e) { /* sandbox */ } }
 }
@@ -129,6 +152,7 @@ $('#detail').addEventListener('click', e => {
   const b = e.target.closest('[data-do]'); if (!b || !curTerm) return;
   const list = TERMS.filter(x => x.c === curTerm.c), pos = list.indexOf(curTerm);
   if (b.dataset.do === 'copy') copy(curTerm.p, 'Exemplo copiado', $('#exPrompt'));
+  if (b.dataset.do === 'code') copy($('#exCode').textContent, 'Código copiado', $('#exCode'));
   if (b.dataset.do === 'prev' && pos > 0) select(list[pos - 1]);
   if (b.dataset.do === 'next' && pos < list.length - 1) select(list[pos + 1]);
   if (b.dataset.do === 'use') { builder.setTerm(curTerm); showTab('montar'); toast(`“${curTerm.en}” adicionado à folha`); }
@@ -208,7 +232,7 @@ const builder = {
     if (sel.cor && sel.cor.id === 'black-and-white') neg.unshift('color');
     if (sel.foco && sel.foco.id === 'deep-focus') neg.unshift('background blur');
     $('#negText').textContent = neg.join(', ');
-    V.v2.set(this.spec(sel));
+    play('v2', this.spec(sel));
   }
 };
 
@@ -236,7 +260,7 @@ const quiz = {
     this.cur = ans;
     const watch = this.mode === 'watch';
     $('#mon3').hidden = !watch; $('#qRead').hidden = watch;
-    if (watch) { V.v3.set(ans.x); V.v3.resize(); } else { $('#qDef').textContent = ans.d; }
+    if (watch) play('v3', ans.x); else { play('v3', null); $('#qDef').textContent = ans.d; }
     $('#qAsk').textContent = watch ? 'Que termo descreve esta demonstração?' : 'Que termo corresponde a esta definição?';
     $('#qOpts').innerHTML = opts.map(o => `<button class="q-opt" type="button" data-id="${o.id}"><b>${esc(o.en)}</b><small>${esc(o.pt)}</small></button>`).join('');
     $('#qFeedback').textContent = ''; $('#qFeedback').className = 'q-feedback';
