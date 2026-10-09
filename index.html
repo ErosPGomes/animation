@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Léxico do Animador</title>
+<meta name="description" content="Vocabulário técnico de câmera e animação com demonstrações animadas, montador de prompts e treino, para escrever prompts de vídeo e imagem com IA.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<!-- APP:START -->
+<header class="top">
+  <div class="brand">
+    <p class="slate"><span>X-SHEET</span><span id="countTerms">144 termos</span><span>12 categorias</span></p>
+    <h1>Léxico do Animador</h1>
+    <p class="lede">A linguagem técnica de câmera e animação, demonstrada em movimento, para você escrever prompts de vídeo e imagem com precisão.</p>
+  </div>
+  <nav class="tabs" role="tablist" aria-label="Seções">
+    <button role="tab" id="tab-explorar" aria-controls="explorar" aria-selected="true">Explorar</button>
+    <button role="tab" id="tab-montar" aria-controls="montar" aria-selected="false">Montar prompt</button>
+    <button role="tab" id="tab-treinar" aria-controls="treinar" aria-selected="false">Treinar</button>
+  </nav>
+  <div class="progress" aria-live="polite">
+    <span class="progress-label">Termos estudados</span>
+    <span class="progress-num"><b id="seenCount">0</b>/<span id="totalCount">144</span></span>
+    <span class="bar"><i id="seenBar"></i></span>
+  </div>
+</header>
+
+<main>
+<!-- EXPLORAR -->
+<section id="explorar" class="view" role="tabpanel" aria-labelledby="tab-explorar">
+  <div class="cats" id="cats" role="tablist" aria-label="Categorias"></div>
+  <div class="explore">
+    <aside class="sheet list-col">
+      <label class="search"><span class="sr">Buscar termo</span>
+        <input id="q" type="search" placeholder="Buscar: dolly, bokeh, plongée…" autocomplete="off">
+      </label>
+      <div class="sheet-head"><span>Nº</span><span>Termo no prompt</span><span>PT</span></div>
+      <ol id="termList" class="term-list"></ol>
+    </aside>
+    <div class="stage-col">
+      <figure class="monitor" id="mon1">
+        <canvas id="cv1" aria-label="Demonstração animada do termo selecionado" role="img"></canvas>
+        <div class="hud"><span class="rec"></span><span class="tc" data-tc>00:00:00:00</span><span data-lens>35mm · f/5.6</span><span>24 fps</span></div>
+        <div class="mon-ctrl">
+          <button class="chip-btn" data-act="pause" aria-pressed="false">Pausar</button>
+          <button class="chip-btn" data-act="thirds" aria-pressed="false">Terços</button>
+          <button class="chip-btn" data-act="safe" aria-pressed="false">Área segura</button>
+        </div>
+      </figure>
+      <article class="detail sheet" id="detail" aria-live="polite"></article>
+    </div>
+  </div>
+</section>
+
+<!-- MONTAR -->
+<section id="montar" class="view" role="tabpanel" aria-labelledby="tab-montar" hidden>
+  <div class="builder">
+    <form class="sheet bform" id="bform" autocomplete="off">
+      <div class="bf-head"><h2>Folha do plano</h2><button type="button" class="link-btn" id="bRandom">Sortear</button><button type="button" class="link-btn" id="bClear">Limpar</button></div>
+      <div class="fields-text">
+        <label for="bSubject">Assunto <small>quem</small></label>
+        <input id="bSubject" value="a small explorer in a red scarf">
+        <label for="bAction">Ação <small>o que faz</small></label>
+        <input id="bAction" value="stops and looks up at the sky">
+        <label for="bSetting">Cenário <small>onde</small></label>
+        <input id="bSetting" value="in a quiet valley at the edge of a pine forest">
+      </div>
+      <div class="fields-sel" id="bSelects"></div>
+    </form>
+    <div class="b-out">
+      <figure class="monitor" id="mon2">
+        <canvas id="cv2" aria-label="Prévia aproximada do plano montado" role="img"></canvas>
+        <div class="hud"><span class="rec"></span><span class="tc" data-tc>00:00:00:00</span><span data-lens>35mm · f/5.6</span><span>prévia</span></div>
+        <div class="mon-ctrl">
+          <button class="chip-btn" data-act="pause" aria-pressed="false">Pausar</button>
+          <button class="chip-btn" data-act="thirds" aria-pressed="false">Terços</button>
+        </div>
+      </figure>
+      <div class="sheet prompt-sheet">
+        <div class="ps-head"><h2>Prompt</h2><span class="ps-meta" id="pMeta"></span><button class="btn" id="copyPrompt" type="button">Copiar prompt</button></div>
+        <p class="prompt-text" id="promptText"></p>
+        <table class="xs-table" id="xsTable"><thead><tr><th>Camada</th><th>Termo</th><th>Trecho no prompt</th></tr></thead><tbody></tbody></table>
+        <div class="neg"><h3>Prompt negativo sugerido</h3><p id="negText"></p><button class="link-btn" id="copyNeg" type="button">Copiar negativo</button></div>
+      </div>
+      <div class="sheet tips">
+        <h2>Gramática de um bom prompt de vídeo</h2>
+        <ol class="tips-list">
+          <li><b>Ordem:</b> plano e ângulo → assunto e ação → cenário → movimento de câmera → lente → luz → estilo → cor → ritmo. A maioria dos modelos pesa mais o começo do texto.</li>
+          <li><b>Um movimento por plano.</b> No máximo dois combinados ("slow dolly in while tilting up"). Movimentos conflitantes geram tremor e deformação.</li>
+          <li><b>Separe câmera e personagem.</b> "The explorer turns their head" é ação; "the camera orbits" é câmera.</li>
+          <li><b>Diga a velocidade:</b> slow, smooth, steady, fast, sudden. Sem isso, o modelo escolhe.</li>
+          <li><b>Use unidades reais:</b> 35mm, 85mm, f/1.4, 24fps, 2.39:1. Números físicos são entendidos com consistência.</li>
+          <li><b>Evite contradições:</b> "static shot" com "orbit", "deep focus" com "shallow depth of field".</li>
+          <li><b>Descreva traços, não marcas:</b> "cel-shaded, bold outlines" funciona em mais modelos que citar estúdios ou artistas.</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TREINAR -->
+<section id="treinar" class="view" role="tabpanel" aria-labelledby="tab-treinar" hidden>
+  <div class="quiz">
+    <div class="q-bar sheet">
+      <div class="q-modes" role="radiogroup" aria-label="Modo">
+        <button class="chip-btn" role="radio" aria-checked="true" data-mode="watch">Assista e identifique</button>
+        <button class="chip-btn" role="radio" aria-checked="false" data-mode="read">Leia e identifique</button>
+      </div>
+      <label class="q-cat" for="qCat">Categoria <select id="qCat"></select></label>
+      <div class="q-score"><span>Acertos <b id="qOk">0</b></span><span>Sequência <b id="qStreak">0</b></span><span>Recorde <b id="qBest">0</b></span></div>
+    </div>
+    <div class="q-main">
+      <figure class="monitor" id="mon3">
+        <canvas id="cv3" aria-label="Demonstração para identificar" role="img"></canvas>
+        <div class="hud"><span class="rec"></span><span class="tc" data-tc>00:00:00:00</span><span>?</span></div>
+      </figure>
+      <div class="q-read sheet" id="qRead" hidden><p class="q-def" id="qDef"></p></div>
+      <div class="q-panel sheet">
+        <p class="q-ask" id="qAsk">Que termo descreve este plano?</p>
+        <div class="q-opts" id="qOpts"></div>
+        <p class="q-feedback" id="qFeedback" aria-live="polite"></p>
+        <button class="btn" id="qNext" type="button">Próxima</button>
+      </div>
+    </div>
+  </div>
+</section>
+</main>
+<footer class="foot"><p>Demonstrações desenhadas em tempo real: cada plano usa uma câmera virtual com distância focal em mm e abertura f/N reais. Os prompts saem em inglês, idioma em que a maioria dos modelos de vídeo foi treinada.</p></footer>
+<div class="toast" id="toast" role="status" hidden></div>
+<!-- APP:END -->
+<script src="js/terms.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
